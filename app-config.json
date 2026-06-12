@@ -1,0 +1,25 @@
+{
+  "app": {
+    "title": "Tất Tần Tật - Phú Tân 67K1",
+    "headerTitle": "Tất Tần Tật - Phú Tân 67K1",
+    "headerColor": {
+      "light": "#1843EF",
+      "dark": "#1843EF"
+    },
+    "textColor": "white",
+    "textAlign": "left",
+    "statusBarColor": "#1843EF",
+    "leftButton": "none",
+    "statusBar": "normal",
+    "actionBarHidden": false,
+    "hideAndroidBottomNavigationBar": false,
+    "hideIOSSafeAreaBottom": false,
+    "selfControlLoading": false
+  },
+  "debug": false,
+  "pages": [],
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": [],
+  "template": {}
+}
