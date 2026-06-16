@@ -6,6 +6,7 @@ interface TokensData {
 }
 
 const ZALO_ENDPOINT = "https://graph.zalo.me/v2.0/me/info";
+// https://developers.zalo.me/app/2037517839662003086/settings
 const ZALO_SECRET_KEY = "ZALO_SECRET_KEY";
 
 export const fetchTokens = async (): Promise<TokensData | null> => {

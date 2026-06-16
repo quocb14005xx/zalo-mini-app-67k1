@@ -44,6 +44,7 @@ const HomePage: React.FunctionComponent = () => {
   const [open, setOpen] = React.useState(false);
   const [iframeUrl, setIframeUrl] = React.useState("https://tattantat67k1.web.app/");
   const [locationError, setLocationError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
     const initializeTokens = async () => {
@@ -91,10 +92,17 @@ const HomePage: React.FunctionComponent = () => {
         </div>
       )}
 
+      {isLoading && (
+        <div className="iframe-loading">
+          <div className="spinner"></div>
+        </div>
+      )}
+
       <iframe
         src={iframeUrl}
         style={{ flex: 1, width: "100%", border: "none" }}
         title="Tất Tân Tật"
+        onLoad={() => setIsLoading(false)}
       />
 
       {open && <div className="fab-backdrop" onClick={() => setOpen(false)} />}
