@@ -1,7 +1,26 @@
 import React from "react";
+import { useLocation } from "react-router-dom";
 import { Page } from "zmp-ui";
 import { openChat, addRating, favoriteApp, openShareSheet } from "zmp-sdk";
 import { fetchTokens, buildWebAppUrl, sendTokensToZalo } from "../utils/tokens";
+
+const DEFAULT_WEB_APP_URL = "https://tattantat67k1.web.app/";
+
+const getDeepLinkWebAppUrl = (search: string): string => {
+  const params = new URLSearchParams(search);
+  const type = params.get("type");
+  const id = params.get("id");
+
+  if (!id) return DEFAULT_WEB_APP_URL;
+
+  if (type === "vlog") {
+    return `https://tattantat67k1.web.app/vlogs?v=${encodeURIComponent(id)}`;
+  }
+  if (type === "post") {
+    return `https://tattantat67k1.web.app/post-detail/${encodeURIComponent(id)}`;
+  }
+  return DEFAULT_WEB_APP_URL;
+};
 
 const actions = [
   {
@@ -44,8 +63,11 @@ const RATING_HINT_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 ngày
 const RATING_HINT_STORAGE_KEY = "ratingHintLastShownAt";
 
 const HomePage: React.FunctionComponent = () => {
+  const location = useLocation();
+  const deepLinkUrl = React.useMemo(() => getDeepLinkWebAppUrl(location.search), [location.search]);
+
   const [open, setOpen] = React.useState(false);
-  const [iframeUrl, setIframeUrl] = React.useState("https://tattantat67k1.web.app/");
+  const [iframeUrl, setIframeUrl] = React.useState(deepLinkUrl);
   const [locationError, setLocationError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [showRatingHint, setShowRatingHint] = React.useState(false);
@@ -75,7 +97,7 @@ const HomePage: React.FunctionComponent = () => {
     const initializeTokens = async () => {
       const tokens = await fetchTokens();
       if (tokens) {
-        let urlWithTokens = buildWebAppUrl("https://tattantat67k1.web.app/", tokens);
+        let urlWithTokens = buildWebAppUrl(deepLinkUrl, tokens);
         setIframeUrl(urlWithTokens);
 
         try {
@@ -100,7 +122,7 @@ const HomePage: React.FunctionComponent = () => {
       }
     };
     initializeTokens();
-  }, []);
+  }, [deepLinkUrl]);
 
   return (
     <Page style={{ padding: 0, height: "100vh", display: "flex", flexDirection: "column" }}>
