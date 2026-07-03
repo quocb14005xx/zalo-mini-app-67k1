@@ -40,7 +40,7 @@ const actions = [
   },
 ];
 
-const RATING_HINT_INTERVAL = 10 * 1000; // TODO: đổi lại 3 * 24 * 60 * 60 * 1000 (3 ngày) trước khi release
+const RATING_HINT_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 ngày
 const RATING_HINT_STORAGE_KEY = "ratingHintLastShownAt";
 
 const HomePage: React.FunctionComponent = () => {
