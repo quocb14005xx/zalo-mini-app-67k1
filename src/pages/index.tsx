@@ -40,11 +40,36 @@ const actions = [
   },
 ];
 
+const RATING_HINT_INTERVAL = 10 * 1000; // TODO: đổi lại 3 * 24 * 60 * 60 * 1000 (3 ngày) trước khi release
+const RATING_HINT_STORAGE_KEY = "ratingHintLastShownAt";
+
 const HomePage: React.FunctionComponent = () => {
   const [open, setOpen] = React.useState(false);
   const [iframeUrl, setIframeUrl] = React.useState("https://tattantat67k1.web.app/");
   const [locationError, setLocationError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [showRatingHint, setShowRatingHint] = React.useState(false);
+
+  const dismissRatingHint = () => setShowRatingHint(false);
+
+  React.useEffect(() => {
+    try {
+      const now = Date.now();
+      const lastShownAt = Number(localStorage.getItem(RATING_HINT_STORAGE_KEY) || 0);
+      if (now - lastShownAt >= RATING_HINT_INTERVAL) {
+        setShowRatingHint(true);
+        localStorage.setItem(RATING_HINT_STORAGE_KEY, String(now));
+      }
+    } catch (error) {
+      console.error("Error reading rating hint state:", error);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!showRatingHint) return;
+    const timer = setTimeout(() => setShowRatingHint(false), 8000);
+    return () => clearTimeout(timer);
+  }, [showRatingHint]);
 
   React.useEffect(() => {
     const initializeTokens = async () => {
@@ -108,6 +133,24 @@ const HomePage: React.FunctionComponent = () => {
       {open && <div className="fab-backdrop" onClick={() => setOpen(false)} />}
 
       <div className="fab-container">
+        {showRatingHint && !open && (
+          <div
+            className="fab-rating-hint"
+            onClick={() => {
+              dismissRatingHint();
+              addRating({ success: () => { }, fail: () => { } });
+            }}
+          >
+            <span>⭐ Bạn thấy app thế nào? Đánh giá 5 sao nhé!</span>
+            <button
+              className="fab-rating-hint-close"
+              onClick={(e) => { e.stopPropagation(); dismissRatingHint(); }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="fab-sub-buttons">
           {[...actions].reverse().map((action, i) => (
             <div
@@ -127,7 +170,10 @@ const HomePage: React.FunctionComponent = () => {
           ))}
         </div>
 
-        <button className={`fab-main ${open ? "open" : ""}`} onClick={() => setOpen((v) => !v)}>
+        <button
+          className={`fab-main ${open ? "open" : ""} ${showRatingHint && !open ? "pulse" : ""}`}
+          onClick={() => { dismissRatingHint(); setOpen((v) => !v); }}
+        >
           ✦
         </button>
       </div>
