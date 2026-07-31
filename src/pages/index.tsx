@@ -1,10 +1,24 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { Page } from "zmp-ui";
+import { Page, Modal } from "zmp-ui";
 import { openChat, addRating, favoriteApp, openShareSheet } from "zmp-sdk";
+import { getAccessToken } from "zmp-sdk/apis";
 import { fetchTokens, buildWebAppUrl, sendTokensToZalo } from "../utils/tokens";
 
 const DEFAULT_WEB_APP_URL = "https://tattantat67k1.web.app/";
+const WEB_APP_ORIGIN = new URL(DEFAULT_WEB_APP_URL).origin;
+
+// Must match LOCATION_BRIDGE_REQUEST_TYPE / LOCATION_BRIDGE_RESULT_TYPE in
+// tattantat-phutan's src/utils/geolocation.js — the embedded web app posts a
+// request here whenever the user taps a "get current location" button, since
+// it cannot prompt for geolocation permission itself from inside the iframe.
+const LOCATION_BRIDGE_REQUEST_TYPE = "TATTANTAT_GET_CURRENT_LOCATION";
+const LOCATION_BRIDGE_RESULT_TYPE = "TATTANTAT_LOCATION_RESULT";
+
+type PendingLocationRequest = {
+  requestId: string;
+  source: MessageEventSource;
+};
 
 const getDeepLinkWebAppUrl = (search: string): string => {
   const params = new URLSearchParams(search);
@@ -68,9 +82,10 @@ const HomePage: React.FunctionComponent = () => {
 
   const [open, setOpen] = React.useState(false);
   const [iframeUrl, setIframeUrl] = React.useState(deepLinkUrl);
-  const [locationError, setLocationError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [showRatingHint, setShowRatingHint] = React.useState(false);
+  const [pendingLocationRequest, setPendingLocationRequest] = React.useState<PendingLocationRequest | null>(null);
+  const [locationRequestBusy, setLocationRequestBusy] = React.useState(false);
 
   const dismissRatingHint = () => setShowRatingHint(false);
 
@@ -94,50 +109,110 @@ const HomePage: React.FunctionComponent = () => {
   }, [showRatingHint]);
 
   React.useEffect(() => {
-    const initializeTokens = async () => {
-      const tokens = await fetchTokens();
-      if (tokens) {
-        let urlWithTokens = buildWebAppUrl(deepLinkUrl, tokens);
+    // Only fetch the access token on mount — do NOT call getLocation() here.
+    // Requesting geolocation permission immediately when the web view opens
+    // violates policy; location is only requested later, after the user taps
+    // "Cho phép" on the in-app dialog triggered by the embedded web app
+    // (see the message-bridge effect + handleAllowLocation below).
+    const initializeAccessToken = async () => {
+      try {
+        const accessToken = await getAccessToken();
+        const urlWithTokens = buildWebAppUrl(deepLinkUrl, { accessToken, locationToken: "" });
         setIframeUrl(urlWithTokens);
-
-        try {
-          const response = await sendTokensToZalo(tokens);
-          console.log("Zalo API call successful:", response);
-
-          if (response?.data?.latitude && response?.data?.longitude) {
-            const { latitude, longitude } = response.data;
-            const urlWithLocation = new URL(urlWithTokens);
-            urlWithLocation.searchParams.append("lat", latitude);
-            urlWithLocation.searchParams.append("long", longitude);
-            setIframeUrl(urlWithLocation.toString());
-          }
-        } catch (error: any) {
-          console.error("Error calling Zalo API:", error);
-
-          if (error.message?.includes("GPS_PERMISSION_DENIED")) {
-            setLocationError("Vui lòng cấp quyền truy cập vị trí để có thể tìm các bài blog gần bạn");
-            setTimeout(() => setLocationError(null), 5000);
-          }
-        }
+      } catch (error) {
+        console.error("Error fetching access token:", error);
       }
     };
-    initializeTokens();
+    initializeAccessToken();
   }, [deepLinkUrl]);
+
+  React.useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== WEB_APP_ORIGIN) return;
+      const data = event.data;
+      if (!data || data.type !== LOCATION_BRIDGE_REQUEST_TYPE || !data.requestId || !event.source) return;
+
+      console.log("[HomePage] location request received from iframe", {
+        requestId: data.requestId,
+        origin: event.origin,
+      });
+
+      setPendingLocationRequest({ requestId: data.requestId, source: event.source });
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const replyToLocationRequest = (request: PendingLocationRequest, payload: Record<string, unknown>) => {
+    console.log("[HomePage] replying to location request", { requestId: request.requestId, payload });
+    (request.source as Window).postMessage(
+      { type: LOCATION_BRIDGE_RESULT_TYPE, requestId: request.requestId, ...payload },
+      WEB_APP_ORIGIN
+    );
+  };
+
+  const handleAllowLocation = async () => {
+    if (!pendingLocationRequest) return;
+    const request = pendingLocationRequest;
+    setLocationRequestBusy(true);
+    try {
+      const tokens = await fetchTokens();
+      if (!tokens || !tokens.locationToken) {
+        throw { message: "GPS_PERMISSION_DENIED" };
+      }
+
+      const response = await sendTokensToZalo(tokens);
+      console.log("[HomePage] resolved location via Zalo API", response);
+
+      if (!response?.data?.latitude || !response?.data?.longitude) {
+        throw new Error("Không thể xác định vị trí.");
+      }
+
+      replyToLocationRequest(request, {
+        success: true,
+        latitude: response.data.latitude,
+        longitude: response.data.longitude,
+      });
+    } catch (error: any) {
+      console.error("[HomePage] failed to resolve location", error);
+      const isDenied = error?.message?.includes("GPS_PERMISSION_DENIED") || error?.error === "GPS_PERMISSION_DENIED";
+      replyToLocationRequest(request, {
+        success: false,
+        code: isDenied ? 1 : "zalo_error",
+        message: isDenied
+          ? "Bạn chưa cấp quyền truy cập GPS cho ứng dụng."
+          : "Không thể lấy vị trí từ Zalo.",
+      });
+    } finally {
+      setLocationRequestBusy(false);
+      setPendingLocationRequest(null);
+    }
+  };
+
+  const handleDenyLocation = () => {
+    if (!pendingLocationRequest) return;
+    console.log("[HomePage] user denied location permission dialog", { requestId: pendingLocationRequest.requestId });
+    replyToLocationRequest(pendingLocationRequest, {
+      success: false,
+      code: 1,
+      message: "Bạn đã từ chối chia sẻ vị trí.",
+    });
+    setPendingLocationRequest(null);
+  };
 
   return (
     <Page style={{ padding: 0, height: "100vh", display: "flex", flexDirection: "column" }}>
-      {locationError && (
-        <div style={{
-          padding: "12px 16px",
-          backgroundColor: "#ff9500",
-          color: "white",
-          textAlign: "center",
-          fontSize: "14px",
-          zIndex: 1000
-        }}>
-          {locationError}
-        </div>
-      )}
+      <Modal
+        visible={!!pendingLocationRequest}
+        title="Cho phép truy cập vị trí?"
+        description="Tất Tân Tật muốn dùng vị trí hiện tại của bạn để hiển thị các nội dung gần bạn."
+        onClose={handleDenyLocation}
+        actions={[
+          { text: "Không cho phép", onClick: handleDenyLocation, disabled: locationRequestBusy },
+          { text: "Cho phép", onClick: handleAllowLocation, highLight: true, disabled: locationRequestBusy },
+        ]}
+      />
 
       {isLoading && (
         <div className="iframe-loading">
