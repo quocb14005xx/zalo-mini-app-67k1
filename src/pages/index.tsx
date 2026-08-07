@@ -2,7 +2,7 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { Page, Modal } from "zmp-ui";
 import { openChat, addRating, favoriteApp, openShareSheet } from "zmp-sdk";
-import { getAccessToken } from "zmp-sdk/apis";
+import { getAccessToken, saveImageToGallery } from "zmp-sdk/apis";
 import { fetchTokens, buildWebAppUrl, sendTokensToZalo } from "../utils/tokens";
 
 const DEFAULT_WEB_APP_URL = "https://tattantat67k1.web.app/";
@@ -130,7 +130,47 @@ const HomePage: React.FunctionComponent = () => {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== WEB_APP_ORIGIN) return;
       const data = event.data;
-      if (!data || data.type !== LOCATION_BRIDGE_REQUEST_TYPE || !data.requestId || !event.source) return;
+      if (!data) return;
+
+      // Handle Newspaper Image Export from embedded Web App
+      if (data.type === "NEWSPAPER_EXPORT" && data.dataUrl) {
+        console.log("[ZaloApp] Received NEWSPAPER_EXPORT from iframe", data.filename);
+        try {
+          saveImageToGallery({
+            imageUrl: data.dataUrl,
+            success: () => {
+              console.log("[ZaloApp] Image saved to gallery successfully");
+              openShareSheet({
+                type: "zmp",
+                data: {
+                  title: "Tờ Báo Phú Tân Của Tôi",
+                  description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
+                  thumbnail: data.dataUrl,
+                },
+                success: () => {},
+                fail: () => {},
+              });
+            },
+            fail: (err) => {
+              console.warn("[ZaloApp] Failed to save image to gallery:", err);
+              openShareSheet({
+                type: "zmp",
+                data: {
+                  title: "Tờ Báo Phú Tân Của Tôi",
+                  description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
+                },
+                success: () => {},
+                fail: () => {},
+              });
+            }
+          });
+        } catch (e) {
+          console.error("[ZaloApp] Error handling newspaper export:", e);
+        }
+        return;
+      }
+
+      if (data.type !== LOCATION_BRIDGE_REQUEST_TYPE || !data.requestId || !event.source) return;
 
       console.log("[HomePage] location request received from iframe", {
         requestId: data.requestId,
