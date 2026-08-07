@@ -140,28 +140,37 @@ const HomePage: React.FunctionComponent = () => {
             imageUrl: data.dataUrl,
             success: () => {
               console.log("[ZaloApp] Image saved to gallery successfully");
-              openShareSheet({
-                type: "zmp",
-                data: {
-                  title: "Tờ Báo Phú Tân Của Tôi",
-                  description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
-                  thumbnail: data.dataUrl,
-                },
-                success: () => {},
-                fail: () => {},
-              });
+              try {
+                openShareSheet({
+                  type: "zmp",
+                  data: {
+                    title: "Tờ Báo Phú Tân Của Tôi",
+                    description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
+                    thumbnail: "https://logo-mapps.zdn.vn/cover-photos/e5b9a66e062bef75b63a.jpg",
+                  },
+                  success: () => {},
+                  fail: (err) => console.warn("[ZaloApp] Share sheet fail:", err),
+                });
+              } catch (shareErr) {
+                console.warn("[ZaloApp] Share sheet exception:", shareErr);
+              }
             },
             fail: (err) => {
               console.warn("[ZaloApp] Failed to save image to gallery:", err);
-              openShareSheet({
-                type: "zmp",
-                data: {
-                  title: "Tờ Báo Phú Tân Của Tôi",
-                  description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
-                },
-                success: () => {},
-                fail: () => {},
-              });
+              try {
+                openShareSheet({
+                  type: "zmp",
+                  data: {
+                    title: "Tờ Báo Phú Tân Của Tôi",
+                    description: "Xem tờ báo tôi vừa khởi tạo bằng AI trên Tất Tần Tật Phú Tân!",
+                    thumbnail: "https://logo-mapps.zdn.vn/cover-photos/e5b9a66e062bef75b63a.jpg",
+                  },
+                  success: () => {},
+                  fail: (err) => console.warn("[ZaloApp] Share sheet fail:", err),
+                });
+              } catch (shareErr) {
+                console.warn("[ZaloApp] Share sheet exception:", shareErr);
+              }
             }
           });
         } catch (e) {
